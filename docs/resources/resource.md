@@ -38,6 +38,7 @@ resource "pangolin_resource" "example" {
 - `enabled` (Boolean) Wether the resource is enabled or not.
 - `http` (Boolean) Whether the resource is an HTTP resource.
 - `proxy_port` (Number) The port to proxy for raw resources (when http is set to false).
+- `sso` (Boolean) Wether to enable sso or not.
 - `subdomain` (String) The subdomain for the resource.
 
 ### Read-Only

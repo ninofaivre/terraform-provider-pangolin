@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 
@@ -232,8 +233,14 @@ func (r *targetResource) Read(ctx context.Context, req resource.ReadRequest, res
 	}
 
 	target, err := r.client.GetTarget(int(data.ID.ValueInt64()))
+	var apiError *client.APIError
 	if err != nil {
-		resp.Diagnostics.AddError("Error reading target", err.Error())
+		if errors.As(err, &apiError) && apiError.ApiResponse.Status == 404 {
+			resp.State.RemoveResource(ctx)
+			resp.Diagnostics.AddWarning(fmt.Sprintf("Target[ID=%d] :", data.ID.ValueInt64()), "Not Found")
+		} else {
+			resp.Diagnostics.AddError("Error reading target", err.Error())
+		}
 		return
 	}
 
@@ -259,6 +266,7 @@ func (r *targetResource) Update(ctx context.Context, req resource.UpdateRequest,
 		IP:      data.IP.ValueString(),
 		Port:    int(data.Port.ValueInt64()),
 		Enabled: data.Enabled.ValueBool(),
+		Method:  data.Method.ValueStringPointer(),
 	}
 
 	_, err := r.client.UpdateTarget(int(state.ID.ValueInt64()), target)

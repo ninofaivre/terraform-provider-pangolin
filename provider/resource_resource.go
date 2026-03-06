@@ -36,6 +36,7 @@ type resourceResource struct {
 type resourceResourceModel struct {
 	ID        types.Int64  `tfsdk:"id"`
 	Enabled   types.Bool   `tfsdk:"enabled"`
+	SSO       types.Bool   `tfsdk:"sso"`
 	OrgID     types.String `tfsdk:"org_id"`
 	Name      types.String `tfsdk:"name"`
 	Protocol  types.String `tfsdk:"protocol"`
@@ -64,6 +65,11 @@ func (r *resourceResource) Schema(_ context.Context, _ resource.SchemaRequest, r
 				Computed:            true,
 				Optional:            true,
 				MarkdownDescription: "Wether the resource is enabled or not.",
+			},
+			"sso": schema.BoolAttribute{
+				Computed:            true,
+				Optional:            true,
+				MarkdownDescription: "Wether to enable sso or not.",
 			},
 			"org_id": schema.StringAttribute{
 				Required:            true,
@@ -97,7 +103,6 @@ func (r *resourceResource) Schema(_ context.Context, _ resource.SchemaRequest, r
 			},
 			"proxy_port": schema.Int32Attribute{
 				Optional:            true,
-				Computed:            true,
 				MarkdownDescription: "The port to proxy for raw resources (when http is set to false).",
 			},
 			"subdomain": schema.StringAttribute{
@@ -239,30 +244,24 @@ func (r *resourceResource) Configure(_ context.Context, req resource.ConfigureRe
 
 func (r *resourceResourceModel) ValueResource() client.Resource {
 	res := client.Resource{
-		Name:     r.Name.ValueString(),
-		Protocol: r.Protocol.ValueStringPointer(),
-		Http:     r.Http.ValueBoolPointer(),
-	}
-	if !r.Enabled.IsUnknown() {
-		res.Enabled = r.Enabled.ValueBoolPointer()
-	}
-	if !r.ProxyPort.IsUnknown() {
-		res.ProxyPort = r.ProxyPort.ValueInt32Pointer()
-	}
-	if !r.Subdomain.IsUnknown() {
-		res.Subdomain = r.Subdomain.ValueStringPointer()
-	}
-	if !r.DomainID.IsUnknown() {
-		res.DomainID = r.DomainID.ValueStringPointer()
+		Name:      r.Name.ValueString(),
+		Protocol:  r.Protocol.ValueStringPointer(),
+		Http:      r.Http.ValueBoolPointer(),
+		Enabled:   r.Enabled.ValueBoolPointer(),
+		SSO:       r.SSO.ValueBoolPointer(),
+		ProxyPort: r.ProxyPort.ValueInt32Pointer(),
+		Subdomain: r.Subdomain.ValueStringPointer(),
+		DomainID:  r.DomainID.ValueStringPointer(),
 	}
 	return res
 }
 
-func appendComputedParamsToData(res *client.Resource, data *resourceResourceModel) {
+func (data *resourceResourceModel) pushComputedParams(res *client.Resource) {
 	data.ProxyPort = types.Int32PointerValue(res.ProxyPort)
 	data.Subdomain = types.StringPointerValue(res.Subdomain)
 	data.DomainID = types.StringPointerValue(res.DomainID)
 	data.Enabled = types.BoolPointerValue(res.Enabled)
+	data.SSO = types.BoolPointerValue(res.SSO)
 }
 
 func (r *resourceResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
@@ -280,15 +279,22 @@ func (r *resourceResource) Create(ctx context.Context, req resource.CreateReques
 	}
 
 	data.ID = types.Int64Value(int64(created.ID))
-	appendComputedParamsToData(created, &data)
+	data.pushComputedParams(created)
 
-	if !data.Enabled.IsUnknown() && !data.Enabled.IsNull() {
+	var needUpdate = false
+	for _, param := range []attr.Value{data.Enabled} {
+		if !param.IsUnknown() && !param.IsNull() {
+			needUpdate = true
+			break
+		}
+	}
+	if needUpdate {
 		updated, err := r.client.UpdateResource(int(created.ID), res)
 		if err != nil {
 			resp.Diagnostics.AddError("Error updating resource", err.Error())
 			return
 		}
-		appendComputedParamsToData(updated, &data)
+		data.pushComputedParams(updated)
 	}
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
@@ -306,7 +312,7 @@ func (r *resourceResource) Read(ctx context.Context, req resource.ReadRequest, r
 		var apiError *client.APIError
 		if errors.As(err, &apiError) && apiError.ApiResponse.Status == 404 {
 			resp.State.RemoveResource(ctx)
-			resp.Diagnostics.AddWarning("Error reading resource, fixed by creating it...", err.Error())
+			resp.Diagnostics.AddWarning(fmt.Sprintf("Resource[ID=%d] :", data.ID.ValueInt64()), "Not Found")
 		} else {
 			resp.Diagnostics.AddError("Error reading resource", err.Error())
 		}
@@ -317,7 +323,7 @@ func (r *resourceResource) Read(ctx context.Context, req resource.ReadRequest, r
 	data.Name = types.StringValue(res.Name)
 	data.Protocol = types.StringPointerValue(res.Protocol)
 	data.Http = types.BoolPointerValue(res.Http)
-	appendComputedParamsToData(res, &data)
+	data.pushComputedParams(res)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
@@ -340,7 +346,7 @@ func (r *resourceResource) Update(ctx context.Context, req resource.UpdateReques
 	}
 
 	data.ID = state.ID
-	appendComputedParamsToData(res, &data)
+	data.pushComputedParams(res)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 

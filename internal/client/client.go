@@ -362,6 +362,7 @@ func (c *Client) GetSiteResourceClients(resID int) ([]int, error) {
 type Resource struct {
 	ID        int     `json:"resourceId,omitempty"`
 	Enabled   *bool   `json:"enabled,omitempty"`
+	SSO       *bool   `json:"sso,omitempty"`
 	Name      string  `json:"name"`
 	Protocol  *string `json:"protocol,omitempty"`
 	Http      *bool   `json:"http,omitempty"`
@@ -372,6 +373,7 @@ type Resource struct {
 
 func (c *Client) CreateResource(orgID string, res Resource) (*Resource, error) {
 	res.Enabled = nil
+	res.SSO = nil
 	path := fmt.Sprintf("/org/%s/resource", orgID)
 	data, err := c.doRequest("PUT", path, res)
 	if err != nil {
@@ -447,24 +449,122 @@ func (c *Client) GetOrganization(orgID string) (*Organization, error) {
 	return out.Org, err
 }
 
-func (c *Client) UpdateOrganization(orgID string, res Organization) (*Organization, error) {
-	res.Subnet = nil
-	res.UtilitySubnet = nil
+func (c *Client) UpdateOrganization(orgID string, org Organization) (*Organization, error) {
+	org.Subnet = nil
+	org.UtilitySubnet = nil
 	path := fmt.Sprintf("/org/%s", orgID)
-	data, err := c.doRequest("POST", path, res)
+	data, err := c.doRequest("POST", path, org)
 	if err != nil {
 		return nil, err
 	}
-	var newOrg Organization
+	var udpatedOrg Organization
 	out := struct {
 		Org *Organization `json:"org"`
-	}{Org: &newOrg}
+	}{Org: &udpatedOrg}
 	err = json.Unmarshal(data, &out)
 	return out.Org, err
 }
 
 func (c *Client) DeleteOrganization(orgID string) error {
 	path := fmt.Sprintf("/org/%s", orgID)
+	_, err := c.doRequest("DELETE", path, nil)
+	return err
+}
+
+// Idp definitions
+type Idp struct {
+	ID                 *int64  `json:"idpId,omitempty"`
+	Name               string  `json:"name"`
+	ClientID           string  `json:"clientId"`
+	ClientSecret       string  `json:"clientSecret"`
+	AuthURL            string  `json:"authUrl"`
+	TokenURL           string  `json:"tokenUrl"`
+	IdentifierPath     *string `json:"identifierPath"`
+	EmailPath          *string `json:"emailPath,omitempty"`
+	NamePath           *string `json:"namePath,omitempty"`
+	Scopes             string  `json:"scopes"`
+	AutoProvision      *bool   `json:"autoProvision,omitempty"`
+	DefaultRoleMapping *string `json:"defaultRoleMapping,omitempty"`
+	DefaultOrgMapping  *string `json:"defaultOrgMapping,omitempty"`
+	Tags               *string `json:"tags,omitempty"`
+}
+
+func (c *Client) CreateIdp(idp Idp) (*Idp, error) {
+	idp.DefaultRoleMapping = nil
+	idp.DefaultOrgMapping = nil
+	data, err := c.doRequest("PUT", "/idp/oidc", idp)
+	if err != nil {
+		return nil, err
+	}
+	out := struct {
+		IdpID int64 `json:"idpId"`
+	}{}
+	err = json.Unmarshal(data, &out)
+	if err != nil {
+		return nil, err
+	}
+	return c.GetIdp(out.IdpID)
+}
+
+func (c *Client) GetIdp(idpID int64) (*Idp, error) {
+	path := fmt.Sprintf("/idp/%d", idpID)
+	data, err := c.doRequest("GET", path, nil)
+	if err != nil {
+		return nil, err
+	}
+	out := struct {
+		Idp struct {
+			ID                 int64   `json:"idpId"`
+			Name               string  `json:"name"`
+			AutoProvision      bool    `json:"autoProvision"`
+			DefaultRoleMapping string  `json:"defaultRoleMapping"`
+			DefaultOrgMapping  string  `json:"defaultOrgMapping"`
+			Tags               *string `json:"tags"`
+		} `json:"idp"`
+		IdpOidcConfig struct {
+			ClientID       string  `json:"clientId"`
+			ClientSecret   string  `json:"clientSecret"`
+			AuthURL        string  `json:"authUrl"`
+			TokenURL       string  `json:"tokenUrl"`
+			IdentifierPath *string `json:"identifierPath"`
+			EmailPath      *string `json:"emailPath"`
+			NamePath       *string `json:"namePath"`
+			Scopes         string  `json:"scopes"`
+		} `json:"idpOidcConfig"`
+	}{}
+	err = json.Unmarshal(data, &out)
+	if err != nil {
+		return nil, err
+	}
+	return &Idp{
+		ID:                 &out.Idp.ID,
+		Name:               out.Idp.Name,
+		AutoProvision:      &out.Idp.AutoProvision,
+		DefaultRoleMapping: &out.Idp.DefaultRoleMapping,
+		DefaultOrgMapping:  &out.Idp.DefaultOrgMapping,
+		Tags:               out.Idp.Tags,
+		ClientID:           out.IdpOidcConfig.ClientID,
+		ClientSecret:       out.IdpOidcConfig.ClientSecret,
+		AuthURL:            out.IdpOidcConfig.AuthURL,
+		TokenURL:           out.IdpOidcConfig.TokenURL,
+		IdentifierPath:     out.IdpOidcConfig.IdentifierPath,
+		EmailPath:          out.IdpOidcConfig.EmailPath,
+		NamePath:           out.IdpOidcConfig.NamePath,
+		Scopes:             out.IdpOidcConfig.Scopes,
+	}, nil
+}
+
+func (c *Client) UpdateIdp(idpID int64, res Idp) (*Idp, error) {
+	path := fmt.Sprintf("/idp/%d/oidc", idpID)
+	_, err := c.doRequest("POST", path, res)
+	if err != nil {
+		return nil, err
+	}
+	return c.GetIdp(idpID)
+}
+
+func (c *Client) DeleteIdp(idpID int64) error {
+	path := fmt.Sprintf("/idp/%d", idpID)
 	_, err := c.doRequest("DELETE", path, nil)
 	return err
 }
