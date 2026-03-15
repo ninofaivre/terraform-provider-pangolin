@@ -204,6 +204,9 @@ func (r *siteResource) Create(ctx context.Context, req resource.CreateRequest, r
 
 	data.ID = types.Int64Value(int64(created.ID))
 	data.NiceID = types.StringValue(created.NiceID)
+	data.TCPPortRangeString = types.StringValue(created.TCPPortRangeString)
+	data.UDPPortRangeString = types.StringValue(created.UDPPortRangeString)
+	data.DisableIcmp = types.BoolValue(created.DisableIcmp)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
@@ -300,6 +303,15 @@ func (r *siteResource) Update(ctx context.Context, req resource.UpdateRequest, r
 
 	data.ID = state.ID
 	data.NiceID = state.NiceID
+	if data.TCPPortRangeString.IsUnknown() {
+		data.TCPPortRangeString = types.StringValue("")
+	}
+	if data.UDPPortRangeString.IsUnknown() {
+		data.UDPPortRangeString = types.StringValue("")
+	}
+	if data.DisableIcmp.IsUnknown() {
+		data.DisableIcmp = types.BoolValue(false)
+	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 

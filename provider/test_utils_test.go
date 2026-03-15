@@ -41,7 +41,12 @@ func getTestSiteID(t *testing.T) int {
 	}
 
 	// Create one if it doesn't exist
-	site, err := c.CreateSite(testOrgID, "Test Site")
+	site, err := c.CreateSite(testOrgID, &client.Site{
+		Name:   "Test Site",
+		NewtID: "test-newt-id-123",
+		Secret: "test-secret-123456789012345678901234567890",
+		Type:   "newt",
+	})
 	if err != nil {
 		t.Fatalf("failed to create test site: %v", err)
 	}

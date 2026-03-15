@@ -174,8 +174,12 @@ func (c *Client) ListRoles(orgID string) ([]Role, error) {
 
 // Site definitions
 type Site struct {
-	ID   int    `json:"siteId"`
-	Name string `json:"name"`
+	ID      int    `json:"siteId"`
+	Name    string `json:"name"`
+	NewtID  string `json:"newtId,omitempty"`
+	Secret  string `json:"secret,omitempty"`
+	Address string `json:"address,omitempty"`
+	Type    string `json:"type,omitempty"`
 }
 
 func (c *Client) ListSites(orgID string) ([]Site, error) {
@@ -191,13 +195,16 @@ func (c *Client) ListSites(orgID string) ([]Site, error) {
 	return wrapper.Sites, err
 }
 
-func (c *Client) CreateSite(orgID string, name string) (*Site, error) {
+func (c *Client) CreateSite(orgID string, site *Site) (*Site, error) {
 	path := fmt.Sprintf("/org/%s/site", orgID)
 	body := map[string]interface{}{
-		"name":   name,
-		"type":   "newt",
-		"newtId": "test-newt-" + time.Now().Format("150405"),
-		"secret": "test-secret-123",
+		"name":   site.Name,
+		"newtId": site.NewtID,
+		"secret": site.Secret,
+		"type":   site.Type,
+	}
+	if site.Address != "" {
+		body["address"] = site.Address
 	}
 	data, err := c.doRequest("PUT", path, body)
 	if err != nil {
@@ -206,6 +213,40 @@ func (c *Client) CreateSite(orgID string, name string) (*Site, error) {
 	var out Site
 	err = json.Unmarshal(data, &out)
 	return &out, err
+}
+
+func (c *Client) GetSite(siteID int) (*Site, error) {
+	path := fmt.Sprintf("/site/%d", siteID)
+	data, err := c.doRequest("GET", path, nil)
+	if err != nil {
+		return nil, err
+	}
+	var out Site
+	err = json.Unmarshal(data, &out)
+	return &out, err
+}
+
+func (c *Client) UpdateSite(siteID int, site *Site) (*Site, error) {
+	path := fmt.Sprintf("/site/%d", siteID)
+	body := map[string]interface{}{
+		"name": site.Name,
+	}
+	if site.Address != "" {
+		body["address"] = site.Address
+	}
+	data, err := c.doRequest("POST", path, body)
+	if err != nil {
+		return nil, err
+	}
+	var out Site
+	err = json.Unmarshal(data, &out)
+	return &out, err
+}
+
+func (c *Client) DeleteSite(siteID int) error {
+	path := fmt.Sprintf("/site/%d", siteID)
+	_, err := c.doRequest("DELETE", path, nil)
+	return err
 }
 
 // SiteResource definitions
@@ -227,7 +268,7 @@ type SiteResource struct {
 }
 
 func (c *Client) CreateSiteResource(orgID string, res *SiteResource) (*SiteResource, error) {
-	path := fmt.Sprintf("/org/%s/private-resource", orgID)
+	path := fmt.Sprintf("/org/%s/site-resource", orgID)
 	body := map[string]interface{}{
 		"name":        res.Name,
 		"mode":        res.Mode,
