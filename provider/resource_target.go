@@ -103,12 +103,12 @@ func (r *targetResource) Schema(_ context.Context, _ resource.SchemaRequest, res
 				MarkdownDescription: "Whether the target is enabled.",
 			},
 			"hc_enabled": schema.BoolAttribute{
-                Computed:            true,
+				Computed:            true,
 				Optional:            true,
 				MarkdownDescription: "Whether health checks are enabled.",
-                PlanModifiers: []planmodifier.Bool{
-                    boolplanmodifier.UseStateForUnknown(),
-                },
+				PlanModifiers: []planmodifier.Bool{
+					boolplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"hc_path": schema.StringAttribute{
 				Optional:            true,
@@ -176,14 +176,14 @@ func (r *targetResource) Schema(_ context.Context, _ resource.SchemaRequest, res
 			},
 			"priority": schema.Int64Attribute{
 				Optional:            true,
-                Computed:            true,
+				Computed:            true,
 				MarkdownDescription: "The priority of the target.",
 				PlanModifiers: []planmodifier.Int64{
 					int64planmodifier.UseStateForUnknown(),
 				},
-                Validators: []validator.Int64{
-                    int64validator.Between(1, 1000),
-                },
+				Validators: []validator.Int64{
+					int64validator.Between(1, 1000),
+				},
 			},
 		},
 	}
@@ -204,37 +204,37 @@ func (r *targetResource) Configure(_ context.Context, req resource.ConfigureRequ
 }
 
 func (r *targetResourceModel) ValueTarget() client.Target {
-    return client.Target{
-        SiteID: r.SiteID.ValueInt64(),
-        IP: r.IP.ValueString(),
-        Port: r.Port.ValueInt32(),
-        Method: r.Method.ValueStringPointer(),
-        Enabled: r.Enabled.ValueBoolPointer(),
-        HCEnabled: nilIfUnknown(r.HCEnabled, r.HCEnabled.ValueBoolPointer),
-        HCPath: r.HCPath.ValueStringPointer(),
-        HCScheme: r.HCScheme.ValueStringPointer(),
-        HCMode: r.HCMode.ValueStringPointer(),
-        HCHostname: r.HCHostname.ValueStringPointer(),
-        HCPort: r.HCPort.ValueInt32Pointer(),
-        HCInterval: r.HCInterval.ValueInt64Pointer(),
-        HCUnhealthyInterval: r.HCUnhealthyInterval.ValueInt64Pointer(),
-        HCTimeout: r.HCTimeout.ValueInt64Pointer(),
-        HCFollowRedirects: r.HCFollowRedirects.ValueBoolPointer(),
-        HCMethod: r.HCMethod.ValueStringPointer(),
-        HCStatus: r.HCStatus.ValueInt64Pointer(),
-        HCTlsServerName: r.HCTlsServerName.ValueStringPointer(),
-        Path: r.Path.ValueStringPointer(),
-        PathMatchType: r.PathMatchType.ValueStringPointer(),
-        RewritePath: r.RewritePath.ValueStringPointer(),
-        RewritePathType: r.RewritePathType.ValueStringPointer(),
-	Priority: nilIfUnknown(r.Priority, r.Priority.ValueInt64Pointer),
-    }
+	return client.Target{
+		SiteID:              r.SiteID.ValueInt64(),
+		IP:                  r.IP.ValueString(),
+		Port:                r.Port.ValueInt32(),
+		Method:              r.Method.ValueStringPointer(),
+		Enabled:             r.Enabled.ValueBoolPointer(),
+		HCEnabled:           nilIfUnknown(r.HCEnabled, r.HCEnabled.ValueBoolPointer),
+		HCPath:              r.HCPath.ValueStringPointer(),
+		HCScheme:            r.HCScheme.ValueStringPointer(),
+		HCMode:              r.HCMode.ValueStringPointer(),
+		HCHostname:          r.HCHostname.ValueStringPointer(),
+		HCPort:              r.HCPort.ValueInt32Pointer(),
+		HCInterval:          r.HCInterval.ValueInt64Pointer(),
+		HCUnhealthyInterval: r.HCUnhealthyInterval.ValueInt64Pointer(),
+		HCTimeout:           r.HCTimeout.ValueInt64Pointer(),
+		HCFollowRedirects:   r.HCFollowRedirects.ValueBoolPointer(),
+		HCMethod:            r.HCMethod.ValueStringPointer(),
+		HCStatus:            r.HCStatus.ValueInt64Pointer(),
+		HCTlsServerName:     r.HCTlsServerName.ValueStringPointer(),
+		Path:                r.Path.ValueStringPointer(),
+		PathMatchType:       r.PathMatchType.ValueStringPointer(),
+		RewritePath:         r.RewritePath.ValueStringPointer(),
+		RewritePathType:     r.RewritePathType.ValueStringPointer(),
+		Priority:            nilIfUnknown(r.Priority, r.Priority.ValueInt64Pointer),
+	}
 }
 
 func (data *targetResourceModel) pushComputedParams(res *client.Target) {
-    data.Enabled = types.BoolPointerValue(res.Enabled)
-    data.Priority = types.Int64PointerValue(res.Priority)
-    data.HCEnabled = types.BoolPointerValue(res.HCEnabled)
+	data.Enabled = types.BoolPointerValue(res.Enabled)
+	data.Priority = types.Int64PointerValue(res.Priority)
+	data.HCEnabled = types.BoolPointerValue(res.HCEnabled)
 }
 
 func (r *targetResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
@@ -254,7 +254,7 @@ func (r *targetResource) Create(ctx context.Context, req resource.CreateRequest,
 	}
 
 	data.ID = types.Int64Value(int64(created.ID))
-    data.pushComputedParams(created)
+	data.pushComputedParams(created)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
@@ -279,29 +279,29 @@ func (r *targetResource) Read(ctx context.Context, req resource.ReadRequest, res
 		return
 	}
 
-    data.ResourceID = types.Int64PointerValue(target.ResourceID)
+	data.ResourceID = types.Int64PointerValue(target.ResourceID)
 	data.SiteID = types.Int64Value(int64(target.SiteID))
 	data.IP = types.StringValue(target.IP)
-    data.Port = types.Int32Value(target.Port)
-    data.Method = types.StringPointerValue(target.Method)
-    data.HCEnabled = types.BoolPointerValue(target.HCEnabled)
-    data.HCPath = types.StringPointerValue(target.HCPath)
-    data.HCScheme = types.StringPointerValue(target.HCScheme)
-    data.HCMode = types.StringPointerValue(target.HCMode)
-    data.HCHostname = types.StringPointerValue(target.HCHostname)
-    data.HCPort = types.Int32PointerValue(target.HCPort)
-    data.HCInterval = types.Int64PointerValue(target.HCInterval)
-    data.HCUnhealthyInterval = types.Int64PointerValue(target.HCUnhealthyInterval)
-    data.HCTimeout = types.Int64PointerValue(target.HCTimeout)
-    data.HCFollowRedirects = types.BoolPointerValue(target.HCFollowRedirects)
-    data.HCMethod = types.StringPointerValue(target.HCMethod)
-    data.HCStatus = types.Int64PointerValue(target.HCStatus)
-    data.HCTlsServerName = types.StringPointerValue(target.HCTlsServerName)
-    data.Path = types.StringPointerValue(target.Path)
-    data.PathMatchType = types.StringPointerValue(target.PathMatchType)
-    data.RewritePath = types.StringPointerValue(target.RewritePath)
-    data.RewritePathType = types.StringPointerValue(target.RewritePathType)
-    data.pushComputedParams(target)
+	data.Port = types.Int32Value(target.Port)
+	data.Method = types.StringPointerValue(target.Method)
+	data.HCEnabled = types.BoolPointerValue(target.HCEnabled)
+	data.HCPath = types.StringPointerValue(target.HCPath)
+	data.HCScheme = types.StringPointerValue(target.HCScheme)
+	data.HCMode = types.StringPointerValue(target.HCMode)
+	data.HCHostname = types.StringPointerValue(target.HCHostname)
+	data.HCPort = types.Int32PointerValue(target.HCPort)
+	data.HCInterval = types.Int64PointerValue(target.HCInterval)
+	data.HCUnhealthyInterval = types.Int64PointerValue(target.HCUnhealthyInterval)
+	data.HCTimeout = types.Int64PointerValue(target.HCTimeout)
+	data.HCFollowRedirects = types.BoolPointerValue(target.HCFollowRedirects)
+	data.HCMethod = types.StringPointerValue(target.HCMethod)
+	data.HCStatus = types.Int64PointerValue(target.HCStatus)
+	data.HCTlsServerName = types.StringPointerValue(target.HCTlsServerName)
+	data.Path = types.StringPointerValue(target.Path)
+	data.PathMatchType = types.StringPointerValue(target.PathMatchType)
+	data.RewritePath = types.StringPointerValue(target.RewritePath)
+	data.RewritePathType = types.StringPointerValue(target.RewritePathType)
+	data.pushComputedParams(target)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
@@ -324,7 +324,7 @@ func (r *targetResource) Update(ctx context.Context, req resource.UpdateRequest,
 	}
 
 	data.ID = state.ID
-    data.pushComputedParams(updated)
+	data.pushComputedParams(updated)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 

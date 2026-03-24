@@ -1,7 +1,7 @@
 package provider
 
 import (
-    "context"
+	"context"
 	"errors"
 	"fmt"
 
@@ -75,6 +75,7 @@ func (r *idpResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *
 			},
 			"client_secret": schema.StringAttribute{
 				Required:            true,
+				Sensitive:           true,
 				MarkdownDescription: "IDP client Secret.",
 				Validators: []validator.String{
 					stringvalidator.LengthAtLeast(1),

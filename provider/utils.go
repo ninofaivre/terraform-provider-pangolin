@@ -1,10 +1,10 @@
 package provider
 
 func nilIfUnknown[T any](val interface {
-    IsUnknown() bool
+	IsUnknown() bool
 }, getter func() *T) *T {
-    if val.IsUnknown() {
-        return nil
-    }
-    return getter()
+	if val.IsUnknown() {
+		return nil
+	}
+	return getter()
 }

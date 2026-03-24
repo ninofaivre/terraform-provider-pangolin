@@ -174,12 +174,13 @@ func (c *Client) ListRoles(orgID string) ([]Role, error) {
 
 // Site definitions
 type Site struct {
-	ID      int    `json:"siteId"`
-	Name    string `json:"name"`
-	NewtID  string `json:"newtId,omitempty"`
-	Secret  string `json:"secret,omitempty"`
-	Address string `json:"address,omitempty"`
-	Type    string `json:"type,omitempty"`
+	ID      int     `json:"siteId,omitempty"`
+	Name    string  `json:"name"`
+	NewtID  *string `json:"newtId,omitempty"`
+	Secret  *string `json:"secret,omitempty"`
+	Address *string `json:"address,omitempty"`
+	Subnet  *string `json:"subnet,omitempty"`
+	Type    *string `json:"type,omitempty"`
 }
 
 func (c *Client) ListSites(orgID string) ([]Site, error) {
@@ -195,18 +196,9 @@ func (c *Client) ListSites(orgID string) ([]Site, error) {
 	return wrapper.Sites, err
 }
 
-func (c *Client) CreateSite(orgID string, site *Site) (*Site, error) {
+func (c *Client) CreateSite(orgID string, site Site) (*Site, error) {
 	path := fmt.Sprintf("/org/%s/site", orgID)
-	body := map[string]interface{}{
-		"name":   site.Name,
-		"newtId": site.NewtID,
-		"secret": site.Secret,
-		"type":   site.Type,
-	}
-	if site.Address != "" {
-		body["address"] = site.Address
-	}
-	data, err := c.doRequest("PUT", path, body)
+	data, err := c.doRequest("PUT", path, site)
 	if err != nil {
 		return nil, err
 	}
@@ -226,15 +218,14 @@ func (c *Client) GetSite(siteID int) (*Site, error) {
 	return &out, err
 }
 
-func (c *Client) UpdateSite(siteID int, site *Site) (*Site, error) {
+func (c *Client) UpdateSite(siteID int, site Site) (*Site, error) {
 	path := fmt.Sprintf("/site/%d", siteID)
-	body := map[string]interface{}{
-		"name": site.Name,
-	}
-	if site.Address != "" {
-		body["address"] = site.Address
-	}
-	data, err := c.doRequest("POST", path, body)
+	site.Address = nil
+	site.Subnet = nil
+	site.NewtID = nil
+	site.Secret = nil
+	site.Type = nil
+	data, err := c.doRequest("POST", path, site)
 	if err != nil {
 		return nil, err
 	}

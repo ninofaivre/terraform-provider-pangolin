@@ -3,16 +3,20 @@ package provider
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 
 	"github.com/groteck/terraform-provider-pangolin/internal/client"
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
@@ -34,12 +38,15 @@ type pangolinSiteResourceModel struct {
 	NewtID  types.String `tfsdk:"newt_id"`
 	Secret  types.String `tfsdk:"secret"`
 	Address types.String `tfsdk:"address"`
+	Subnet  types.String `tfsdk:"subnet"`
 	Type    types.String `tfsdk:"type"`
 }
 
 func (r *pangolinSiteResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_site"
 }
+
+type addressNormalizationModifier struct{}
 
 func (r *pangolinSiteResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
@@ -64,14 +71,14 @@ func (r *pangolinSiteResource) Schema(_ context.Context, _ resource.SchemaReques
 				MarkdownDescription: "The name of the site.",
 			},
 			"newt_id": schema.StringAttribute{
-				Required:            true,
+				Optional:            true,
 				MarkdownDescription: "The Newt client ID for this site.",
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
 			},
 			"secret": schema.StringAttribute{
-				Required:            true,
+				Optional:            true,
 				Sensitive:           true,
 				MarkdownDescription: "The secret key for the Newt client.",
 				PlanModifiers: []planmodifier.String{
@@ -81,6 +88,27 @@ func (r *pangolinSiteResource) Schema(_ context.Context, _ resource.SchemaReques
 			"address": schema.StringAttribute{
 				Optional:            true,
 				MarkdownDescription: "The network address assigned to this site.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
+				Validators: []validator.String{
+					stringvalidator.RegexMatches(
+						regexp.MustCompile(`(?:[0-9]{1,3}\.){3}[0-9]{1,3}`),
+						"must be {address} without cidr",
+					),
+				},
+			},
+			"subnet": schema.StringAttribute{
+				Optional: true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
+				Validators: []validator.String{
+					stringvalidator.RegexMatches(
+						regexp.MustCompile(`(?:[0-9]{1,3}\.){3}[0-9]{1,3}\/(?:(?:[0-2][0-9])|(?:3[0-2])|[0-9])`),
+						"must be {address}/{cidr}",
+					),
+				},
 			},
 			"type": schema.StringAttribute{
 				Required:            true,
@@ -88,8 +116,78 @@ func (r *pangolinSiteResource) Schema(_ context.Context, _ resource.SchemaReques
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
+				Validators: []validator.String{
+					stringvalidator.OneOf("newt", "wireguard", "local"),
+				},
 			},
 		},
+	}
+}
+
+func (r *pangolinSiteResource) ValidateConfig(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
+	var data pangolinSiteResourceModel
+
+	resp.Diagnostics.Append(req.Config.Get(ctx, &data)...)
+	if resp.Diagnostics.HasError() || data.Type.IsUnknown() {
+		return
+	}
+	switch data.Type.ValueString() {
+	case "newt":
+		requiredParams := [](struct {
+			Key   string
+			Value attr.Value
+		}){
+			{"address", data.Address},
+			{"secret", data.Secret},
+			{"newt_id", data.NewtID},
+		}
+		for _, param := range requiredParams {
+			if param.Value.IsUnknown() {
+				continue
+			}
+			if param.Value.IsNull() {
+				resp.Diagnostics.AddError(
+					fmt.Sprintf("Missing required param `%s`", param.Key),
+					fmt.Sprintf(
+						"`%s` is required for a newt site.",
+						param.Key,
+					),
+				)
+			}
+		}
+	case "wireguard":
+		// TODO
+		// requiredParams := [](struct {
+		// 	Key   string
+		// 	Value attr.Value
+		// }){
+		// 	{"subnet", data.Subnet},
+		// 	{"pub_key", data.PubKey},
+		// }
+	case "local":
+		forbiddenParams := [](struct {
+			Key   string
+			Value attr.Value
+		}){
+			{"address", data.Address},
+			{"subnet", data.Subnet},
+			{"secret", data.Secret},
+			{"newt_id", data.NewtID},
+		}
+		for _, param := range forbiddenParams {
+			if param.Value.IsUnknown() {
+				continue
+			}
+			if !param.Value.IsNull() {
+				resp.Diagnostics.AddError(
+					fmt.Sprintf("Forbidden param `%s`", param.Key),
+					fmt.Sprintf(
+						"`%s` is forbidden for a local site.",
+						param.Key,
+					),
+				)
+			}
+		}
 	}
 }
 
@@ -107,6 +205,17 @@ func (r *pangolinSiteResource) Configure(_ context.Context, req resource.Configu
 	r.client = c
 }
 
+func (r *pangolinSiteResourceModel) ValueSite() client.Site {
+	return client.Site{
+		Name:    r.Name.ValueString(),
+		NewtID:  r.NewtID.ValueStringPointer(),
+		Secret:  r.Secret.ValueStringPointer(),
+		Address: r.Address.ValueStringPointer(),
+		Subnet:  r.Subnet.ValueStringPointer(),
+		Type:    r.Type.ValueStringPointer(),
+	}
+}
+
 func (r *pangolinSiteResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var data pangolinSiteResourceModel
 
@@ -115,15 +224,7 @@ func (r *pangolinSiteResource) Create(ctx context.Context, req resource.CreateRe
 		return
 	}
 
-	site := &client.Site{
-		Name:   data.Name.ValueString(),
-		NewtID: data.NewtID.ValueString(),
-		Secret: data.Secret.ValueString(),
-		Type:   data.Type.ValueString(),
-	}
-	if !data.Address.IsNull() {
-		site.Address = data.Address.ValueString()
-	}
+	site := data.ValueSite()
 
 	created, err := r.client.CreateSite(data.OrgID.ValueString(), site)
 	if err != nil {
@@ -151,8 +252,19 @@ func (r *pangolinSiteResource) Read(ctx context.Context, req resource.ReadReques
 	}
 
 	data.Name = types.StringValue(site.Name)
-	if site.Address != "" {
-		data.Address = types.StringValue(site.Address)
+	if site.Address != nil {
+		address, _, _ := strings.Cut(*site.Address, "/")
+		data.Address = types.StringPointerValue(&address)
+	} else {
+		data.Address = types.StringPointerValue(site.Address)
+	}
+
+	// The api allow us to create local site with specific subnet
+	// and the default subnet if none is given is 0.0.0.0/32.
+	// I'm disabling subnet for local sites unless a GUI usage is created.
+	// The api is quite permissive and often allow to do illogic things.
+	if data.Type.ValueString() != "local" {
+		data.Subnet = types.StringPointerValue(site.Subnet)
 	}
 	// newt_id, secret, and type are write-only / not returned by the API;
 	// keep existing state values so Terraform does not see a diff.
@@ -169,12 +281,7 @@ func (r *pangolinSiteResource) Update(ctx context.Context, req resource.UpdateRe
 		return
 	}
 
-	site := &client.Site{
-		Name: data.Name.ValueString(),
-	}
-	if !data.Address.IsNull() {
-		site.Address = data.Address.ValueString()
-	}
+	site := data.ValueSite()
 
 	_, err := r.client.UpdateSite(int(state.ID.ValueInt64()), site)
 	if err != nil {

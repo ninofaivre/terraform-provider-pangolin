@@ -243,7 +243,7 @@ func (r *resourceResource) Configure(_ context.Context, req resource.ConfigureRe
 }
 
 func (r *resourceResourceModel) ValueResource() client.Resource {
-	res := client.Resource{
+	return client.Resource{
 		Name:      r.Name.ValueString(),
 		Protocol:  r.Protocol.ValueStringPointer(),
 		Http:      r.Http.ValueBoolPointer(),
@@ -253,7 +253,6 @@ func (r *resourceResourceModel) ValueResource() client.Resource {
 		Subdomain: r.Subdomain.ValueStringPointer(),
 		DomainID:  r.DomainID.ValueStringPointer(),
 	}
-	return res
 }
 
 func (data *resourceResourceModel) pushComputedParams(res *client.Resource) {
