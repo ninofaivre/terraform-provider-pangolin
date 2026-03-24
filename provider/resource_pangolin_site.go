@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -247,7 +248,20 @@ func (r *pangolinSiteResource) Read(ctx context.Context, req resource.ReadReques
 
 	site, err := r.client.GetSite(int(data.ID.ValueInt64()))
 	if err != nil {
-		resp.Diagnostics.AddError("Error reading site", err.Error())
+		var apiError *client.APIError
+		if errors.As(err, &apiError) && apiError.ApiResponse.Status == 404 {
+			resp.State.RemoveResource(ctx)
+			resp.Diagnostics.AddWarning(
+				fmt.Sprintf(
+					"Site[OrgID=%s,ID=%d] :",
+					data.OrgID.ValueString(),
+					data.ID.ValueInt64(),
+				),
+				"Not Found",
+			)
+		} else {
+			resp.Diagnostics.AddError("Error reading site", err.Error())
+		}
 		return
 	}
 
