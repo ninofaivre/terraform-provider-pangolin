@@ -20,18 +20,18 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
-var _ resource.Resource = &siteResource{}
-var _ resource.ResourceWithImportState = &siteResource{}
+var _ resource.Resource = &siteResourceResource{}
+var _ resource.ResourceWithImportState = &siteResourceResource{}
 
-func NewSiteResource() resource.Resource {
-	return &siteResource{}
+func NewSiteResourceResource() resource.Resource {
+	return &siteResourceResource{}
 }
 
-type siteResource struct {
+type siteResourceResource struct {
 	client *client.Client
 }
 
-type siteResourceModel struct {
+type siteResourceResourceModel struct {
 	ID                 types.Int64  `tfsdk:"id"`
 	NiceID             types.String `tfsdk:"nice_id"`
 	OrgID              types.String `tfsdk:"org_id"`
@@ -49,11 +49,11 @@ type siteResourceModel struct {
 	DisableIcmp        types.Bool   `tfsdk:"disable_icmp"`
 }
 
-func (r *siteResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
+func (r *siteResourceResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_site_resource"
 }
 
-func (r *siteResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
+func (r *siteResourceResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		MarkdownDescription: "Manages a site resource (Host or CIDR mode).",
 		Attributes: map[string]schema.Attribute{
@@ -150,7 +150,7 @@ func (r *siteResource) Schema(_ context.Context, _ resource.SchemaRequest, resp 
 	}
 }
 
-func (r *siteResource) Configure(_ context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
+func (r *siteResourceResource) Configure(_ context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
 	if req.ProviderData == nil {
 		return
 	}
@@ -164,8 +164,8 @@ func (r *siteResource) Configure(_ context.Context, req resource.ConfigureReques
 	r.client = c
 }
 
-func (r *siteResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
-	var data siteResourceModel
+func (r *siteResourceResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+	var data siteResourceResourceModel
 
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
@@ -211,8 +211,8 @@ func (r *siteResource) Create(ctx context.Context, req resource.CreateRequest, r
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
-func (r *siteResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
-	var data siteResourceModel
+func (r *siteResourceResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+	var data siteResourceResourceModel
 
 	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
@@ -262,8 +262,8 @@ func (r *siteResource) Read(ctx context.Context, req resource.ReadRequest, resp 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
-func (r *siteResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	var data, state siteResourceModel
+func (r *siteResourceResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+	var data, state siteResourceResourceModel
 
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
@@ -315,8 +315,8 @@ func (r *siteResource) Update(ctx context.Context, req resource.UpdateRequest, r
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
-func (r *siteResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
-	var data siteResourceModel
+func (r *siteResourceResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	var data siteResourceResourceModel
 
 	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
@@ -330,7 +330,7 @@ func (r *siteResource) Delete(ctx context.Context, req resource.DeleteRequest, r
 	}
 }
 
-func (r *siteResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+func (r *siteResourceResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	// Import format: org_id/id
 	idParts := strings.Split(req.ID, "/")
 

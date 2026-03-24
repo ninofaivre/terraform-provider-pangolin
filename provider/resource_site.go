@@ -21,18 +21,18 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
-var _ resource.Resource = &pangolinSiteResource{}
-var _ resource.ResourceWithImportState = &pangolinSiteResource{}
+var _ resource.Resource = &siteResource{}
+var _ resource.ResourceWithImportState = &siteResource{}
 
-func NewPangolinSiteResource() resource.Resource {
-	return &pangolinSiteResource{}
+func NewSiteResource() resource.Resource {
+	return &siteResource{}
 }
 
-type pangolinSiteResource struct {
+type siteResource struct {
 	client *client.Client
 }
 
-type pangolinSiteResourceModel struct {
+type siteResourceModel struct {
 	ID      types.Int64  `tfsdk:"id"`
 	OrgID   types.String `tfsdk:"org_id"`
 	Name    types.String `tfsdk:"name"`
@@ -43,13 +43,11 @@ type pangolinSiteResourceModel struct {
 	Type    types.String `tfsdk:"type"`
 }
 
-func (r *pangolinSiteResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
+func (r *siteResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_site"
 }
 
-type addressNormalizationModifier struct{}
-
-func (r *pangolinSiteResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
+func (r *siteResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		MarkdownDescription: "Manages a Pangolin site.",
 		Attributes: map[string]schema.Attribute{
@@ -125,8 +123,8 @@ func (r *pangolinSiteResource) Schema(_ context.Context, _ resource.SchemaReques
 	}
 }
 
-func (r *pangolinSiteResource) ValidateConfig(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
-	var data pangolinSiteResourceModel
+func (r *siteResource) ValidateConfig(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
+	var data siteResourceModel
 
 	resp.Diagnostics.Append(req.Config.Get(ctx, &data)...)
 	if resp.Diagnostics.HasError() || data.Type.IsUnknown() {
@@ -192,7 +190,7 @@ func (r *pangolinSiteResource) ValidateConfig(ctx context.Context, req resource.
 	}
 }
 
-func (r *pangolinSiteResource) Configure(_ context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
+func (r *siteResource) Configure(_ context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
 	if req.ProviderData == nil {
 		return
 	}
@@ -206,7 +204,7 @@ func (r *pangolinSiteResource) Configure(_ context.Context, req resource.Configu
 	r.client = c
 }
 
-func (r *pangolinSiteResourceModel) ValueSite() client.Site {
+func (r *siteResourceModel) ValueSite() client.Site {
 	return client.Site{
 		Name:    r.Name.ValueString(),
 		NewtID:  r.NewtID.ValueStringPointer(),
@@ -217,8 +215,8 @@ func (r *pangolinSiteResourceModel) ValueSite() client.Site {
 	}
 }
 
-func (r *pangolinSiteResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
-	var data pangolinSiteResourceModel
+func (r *siteResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+	var data siteResourceModel
 
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
@@ -238,8 +236,8 @@ func (r *pangolinSiteResource) Create(ctx context.Context, req resource.CreateRe
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
-func (r *pangolinSiteResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
-	var data pangolinSiteResourceModel
+func (r *siteResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+	var data siteResourceModel
 
 	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
@@ -286,8 +284,8 @@ func (r *pangolinSiteResource) Read(ctx context.Context, req resource.ReadReques
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
-func (r *pangolinSiteResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	var data, state pangolinSiteResourceModel
+func (r *siteResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+	var data, state siteResourceModel
 
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
@@ -307,8 +305,8 @@ func (r *pangolinSiteResource) Update(ctx context.Context, req resource.UpdateRe
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
-func (r *pangolinSiteResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
-	var data pangolinSiteResourceModel
+func (r *siteResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	var data siteResourceModel
 
 	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
@@ -322,7 +320,7 @@ func (r *pangolinSiteResource) Delete(ctx context.Context, req resource.DeleteRe
 	}
 }
 
-func (r *pangolinSiteResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+func (r *siteResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	// Import format: org_id/site_id
 	idParts := strings.Split(req.ID, "/")
 

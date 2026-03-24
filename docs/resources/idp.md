@@ -19,7 +19,7 @@ Manages idps.
 
 - `auth_url` (String) IDP auth URL.
 - `client_id` (String) IDP client ID.
-- `client_secret` (String) IDP client Secret.
+- `client_secret` (String, Sensitive) IDP client Secret.
 - `identifier_path` (String) IDP identifier Path.
 - `name` (String) The name of the idp.
 - `scopes` (String) IDP identifier Path.
