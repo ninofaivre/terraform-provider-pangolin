@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
+	"strconv"
 	"time"
 )
 
@@ -242,38 +244,25 @@ func (c *Client) DeleteSite(siteID int) error {
 
 // SiteResource definitions
 type SiteResource struct {
-	ID                 int      `json:"siteResourceId,omitempty"`
+	ID                 int64    `json:"siteResourceId,omitempty"`
 	NiceID             string   `json:"niceId,omitempty"`
 	Name               string   `json:"name"`
 	Mode               string   `json:"mode"`
-	SiteID             int      `json:"siteId"`
+	SiteID             int64    `json:"siteId"`
 	Destination        string   `json:"destination"`
-	Enabled            bool     `json:"enabled"`
+	Enabled            *bool    `json:"enabled,omitempty"`
 	Alias              *string  `json:"alias,omitempty"`
 	UserIDs            []string `json:"userIds"`
 	RoleIDs            []int    `json:"roleIds"`
 	ClientIDs          []int    `json:"clientIds"`
 	TCPPortRangeString string   `json:"tcpPortRangeString,omitempty"`
 	UDPPortRangeString string   `json:"udpPortRangeString,omitempty"`
-	DisableIcmp        bool     `json:"disableIcmp,omitempty"`
+	DisableIcmp        *bool    `json:"disableIcmp,omitempty"`
 }
 
 func (c *Client) CreateSiteResource(orgID string, res *SiteResource) (*SiteResource, error) {
 	path := fmt.Sprintf("/org/%s/site-resource", orgID)
-	body := map[string]interface{}{
-		"name":        res.Name,
-		"mode":        res.Mode,
-		"siteId":      res.SiteID,
-		"destination": res.Destination,
-		"enabled":     res.Enabled,
-		"userIds":     res.UserIDs,
-		"roleIds":     res.RoleIDs,
-		"clientIds":   res.ClientIDs,
-	}
-	if res.Alias != nil {
-		body["alias"] = *res.Alias
-	}
-	data, err := c.doRequest("PUT", path, body)
+	data, err := c.doRequest("PUT", path, res)
 	if err != nil {
 		return nil, err
 	}
@@ -282,33 +271,62 @@ func (c *Client) CreateSiteResource(orgID string, res *SiteResource) (*SiteResou
 	return &out, err
 }
 
-func (c *Client) GetSiteResource(orgID string, siteID int, resID int) (*SiteResource, error) {
-	path := fmt.Sprintf("/site-resource/%d", resID)
-	data, err := c.doRequest("GET", path, nil)
-	if err != nil {
-		return nil, err
+func (c *Client) GetSiteResource(orgID string, siteID int64, resID int64) (*SiteResource, error) {
+	// TODO use /site-resource/{siteResourceId} when this issue get resolved :
+	// https://github.com/fosrl/pangolin/issues/2743
+	limit := 1000
+	for offset, nResources := 0, limit; nResources == limit; offset += limit {
+		params := url.Values{
+			"limit":  []string{strconv.Itoa(limit)},
+			"offset": []string{strconv.Itoa(offset)},
+		}
+		u := url.URL{
+			Path:     fmt.Sprintf("/org/%s/site/%d/resources", orgID, siteID),
+			RawQuery: params.Encode(),
+		}
+		data, err := c.doRequest("GET", u.String(), nil)
+		if err != nil {
+			return nil, err
+		}
+
+		var out struct {
+			SiteResources []SiteResource `json:"siteResources"`
+		}
+		err = json.Unmarshal(data, &out)
+		if err != nil {
+			return nil, err
+		}
+
+		nResources = len(out.SiteResources)
+		for _, siteResource := range out.SiteResources {
+			if siteResource.ID == resID {
+				siteResource.RoleIDs, err = c.GetSiteResourceRoles(resID)
+				if err != nil {
+					return nil, err
+				}
+				siteResource.UserIDs, err = c.GetSiteResourceUsers(resID)
+				if err != nil {
+					return nil, err
+				}
+				siteResource.ClientIDs, err = c.GetSiteResourceClients(resID)
+				if err != nil {
+					return nil, err
+				}
+				return &siteResource, nil
+			}
+		}
 	}
-	var out SiteResource
-	err = json.Unmarshal(data, &out)
-	return &out, err
+	return nil, &APIError{ // TODO not a good practice to fake an api error
+		StatusCode: 404,
+		ApiResponse: ApiResponse{
+			Status: 404,
+		},
+	}
 }
 
 func (c *Client) UpdateSiteResource(resID int, res *SiteResource) (*SiteResource, error) {
 	path := fmt.Sprintf("/site-resource/%d", resID)
-	body := map[string]interface{}{
-		"name":        res.Name,
-		"siteId":      res.SiteID,
-		"mode":        res.Mode,
-		"destination": res.Destination,
-		"enabled":     res.Enabled,
-		"userIds":     res.UserIDs,
-		"roleIds":     res.RoleIDs,
-		"clientIds":   res.ClientIDs,
-	}
-	if res.Alias != nil {
-		body["alias"] = *res.Alias
-	}
-	data, err := c.doRequest("POST", path, body)
+	data, err := c.doRequest("POST", path, res)
 	if err != nil {
 		return nil, err
 	}
@@ -323,7 +341,7 @@ func (c *Client) DeleteSiteResource(resID int) error {
 	return err
 }
 
-func (c *Client) GetSiteResourceRoles(resID int) ([]int, error) {
+func (c *Client) GetSiteResourceRoles(resID int64) ([]int, error) {
 	path := fmt.Sprintf("/site-resource/%d/roles", resID)
 	data, err := c.doRequest("GET", path, nil)
 	if err != nil {
@@ -331,24 +349,24 @@ func (c *Client) GetSiteResourceRoles(resID int) ([]int, error) {
 	}
 	var wrapper struct {
 		Roles []struct {
-			RoleID int `json:"roleId"`
+			RoleID int    `json:"roleId"`
+			Name   string `json:"name"`
 		} `json:"roles"`
 	}
 	if err := json.Unmarshal(data, &wrapper); err != nil {
 		return nil, err
 	}
-	ids := make([]int, 0, len(wrapper.Roles))
-	seen := make(map[int]bool)
+	ids := make([]int, 0, len(wrapper.Roles)-1)
 	for _, r := range wrapper.Roles {
-		if !seen[r.RoleID] {
-			ids = append(ids, r.RoleID)
-			seen[r.RoleID] = true
+		if r.Name == "Admin" {
+			continue // remove implied admin role to avoid conflict
 		}
+		ids = append(ids, r.RoleID)
 	}
 	return ids, nil
 }
 
-func (c *Client) GetSiteResourceUsers(resID int) ([]string, error) {
+func (c *Client) GetSiteResourceUsers(resID int64) ([]string, error) {
 	path := fmt.Sprintf("/site-resource/%d/users", resID)
 	data, err := c.doRequest("GET", path, nil)
 	if err != nil {
@@ -369,7 +387,7 @@ func (c *Client) GetSiteResourceUsers(resID int) ([]string, error) {
 	return ids, nil
 }
 
-func (c *Client) GetSiteResourceClients(resID int) ([]int, error) {
+func (c *Client) GetSiteResourceClients(resID int64) ([]int, error) {
 	path := fmt.Sprintf("/site-resource/%d/clients", resID)
 	data, err := c.doRequest("GET", path, nil)
 	if err != nil {
@@ -392,20 +410,22 @@ func (c *Client) GetSiteResourceClients(resID int) ([]int, error) {
 
 // Resource definitions
 type Resource struct {
-	ID        int     `json:"resourceId,omitempty"`
-	Enabled   *bool   `json:"enabled,omitempty"`
-	SSO       *bool   `json:"sso,omitempty"`
-	Name      string  `json:"name"`
-	Protocol  *string `json:"protocol,omitempty"`
-	Http      *bool   `json:"http,omitempty"`
-	ProxyPort *int32  `json:"proxyPort,omitempty"`
-	Subdomain *string `json:"subdomain,omitempty"`
-	DomainID  *string `json:"domainId,omitempty"`
+	ID         int     `json:"resourceId,omitempty"`
+	Name       string  `json:"name"`
+	Protocol   *string `json:"protocol,omitempty"`
+	Http       *bool   `json:"http,omitempty"`
+	ProxyPort  *int32  `json:"proxyPort,omitempty"`
+	Subdomain  *string `json:"subdomain,omitempty"`
+	DomainID   *string `json:"domainId,omitempty"`
+	Enabled    *bool   `json:"enabled,omitempty"`
+	SSO        *bool   `json:"sso,omitempty"`
+	ApplyRules *bool   `json:"applyRules,omitempty"`
 }
 
 func (c *Client) CreateResource(orgID string, res Resource) (*Resource, error) {
 	res.Enabled = nil
 	res.SSO = nil
+	res.ApplyRules = nil
 	path := fmt.Sprintf("/org/%s/resource", orgID)
 	data, err := c.doRequest("PUT", path, res)
 	if err != nil {
@@ -603,7 +623,7 @@ func (c *Client) DeleteIdp(idpID int64) error {
 
 // Target definitions
 type Target struct {
-	ID                  int            `json:"targetId,omitempty"`
+	ID                  int64          `json:"targetId,omitempty"`
 	ResourceID          *int64         `json:"resourceId,omitempty"`
 	SiteID              int64          `json:"siteId"`
 	IP                  string         `json:"ip"`
@@ -628,7 +648,7 @@ type Target struct {
 	PathMatchType       *string        `json:"pathMatchType,omitempty"`
 	RewritePath         *string        `json:"rewritePath,omitempty"`
 	RewritePathType     *string        `json:"rewritePathType,omitempty"`
-	Priority            *int64         `json:"priority,omitempty"`
+	Priority            *int32         `json:"priority,omitempty"`
 }
 
 type TargetHeader struct {
@@ -636,8 +656,8 @@ type TargetHeader struct {
 	Value string `json:"value"`
 }
 
-func (c *Client) CreateTarget(resID int, target Target) (*Target, error) {
-	path := fmt.Sprintf("/resource/%d/target", resID)
+func (c *Client) CreateTarget(target Target) (*Target, error) {
+	path := fmt.Sprintf("/resource/%d/target", *target.ResourceID)
 	target.ResourceID = nil
 	data, err := c.doRequest("PUT", path, target)
 	if err != nil {
@@ -671,8 +691,75 @@ func (c *Client) UpdateTarget(targetID int, target Target) (*Target, error) {
 	return &out, err
 }
 
-func (c *Client) DeleteTarget(targetID int) error {
+func (c *Client) DeleteTarget(targetID int64) error {
 	path := fmt.Sprintf("/target/%d", targetID)
+	_, err := c.doRequest("DELETE", path, nil)
+	return err
+}
+
+// Rule Definitions
+type Rule struct {
+	ID         int64  `json:"ruleId,omitempty"`
+	ResourceID *int64 `json:"resourceId,omitempty"`
+	Action     string `json:"action"`
+	Match      string `json:"match"`
+	Value      string `json:"value"`
+	Priority   int64  `json:"priority"`
+	Enabled    *bool  `json:"enabled,omitempty"`
+}
+
+func (c *Client) CreateRule(rule Rule) (*Rule, error) {
+	path := fmt.Sprintf("/resource/%d/rule", *rule.ResourceID)
+	rule.ResourceID = nil
+	data, err := c.doRequest("PUT", path, rule)
+	if err != nil {
+		return nil, err
+	}
+	var out Rule
+	err = json.Unmarshal(data, &out)
+	return &out, err
+}
+
+func (c *Client) GetRule(ruleID int64, resourceID int64) (*Rule, error) {
+	path := fmt.Sprintf("/resource/%d/rules", resourceID)
+	data, err := c.doRequest("GET", path, nil)
+	if err != nil {
+		return nil, err
+	}
+	var out struct {
+		Rules []Rule `json:"rules"`
+	}
+	err = json.Unmarshal(data, &out)
+	if err != nil {
+		return nil, err
+	}
+	for _, rule := range out.Rules {
+		if rule.ID == ruleID {
+			return &rule, nil
+		}
+	}
+	return nil, &APIError{ // TODO not a good practice to fake an api error
+		StatusCode: 404,
+		ApiResponse: ApiResponse{
+			Status: 404,
+		},
+	}
+}
+
+func (c *Client) UpdateRule(ruleID int64, rule Rule) (*Rule, error) {
+	path := fmt.Sprintf("/resource/%d/rule/%d", *rule.ResourceID, ruleID)
+	rule.ResourceID = nil
+	data, err := c.doRequest("POST", path, rule)
+	if err != nil {
+		return nil, err
+	}
+	var out Rule
+	err = json.Unmarshal(data, &out)
+	return &out, err
+}
+
+func (c *Client) DeleteRule(ruleID int64, resID int64) error {
+	path := fmt.Sprintf("/resource/%d/rule/%d", resID, ruleID)
 	_, err := c.doRequest("DELETE", path, nil)
 	return err
 }

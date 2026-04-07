@@ -9,10 +9,10 @@ import (
 
 	"github.com/groteck/terraform-provider-pangolin/internal/client"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
@@ -100,7 +100,6 @@ func (r *siteResourceResource) Schema(_ context.Context, _ resource.SchemaReques
 			"enabled": schema.BoolAttribute{
 				Optional:            true,
 				Computed:            true,
-				Default:             booldefault.StaticBool(true),
 				MarkdownDescription: "Whether the resource is enabled.",
 			},
 			"alias": schema.StringAttribute{
@@ -164,6 +163,58 @@ func (r *siteResourceResource) Configure(_ context.Context, req resource.Configu
 	r.client = c
 }
 
+func (r *siteResourceResourceModel) ValueSiteResource(diag *diag.Diagnostics, ctx context.Context) client.SiteResource {
+	res := client.SiteResource{
+		Name:               r.Name.ValueString(),
+		Mode:               r.Mode.ValueString(),
+		SiteID:             r.SiteID.ValueInt64(),
+		Destination:        r.Destination.ValueString(),
+		Enabled:            r.Enabled.ValueBoolPointer(),
+		Alias:              r.Alias.ValueStringPointer(),
+		TCPPortRangeString: r.TCPPortRangeString.ValueString(),
+		UDPPortRangeString: r.UDPPortRangeString.ValueString(),
+		DisableIcmp:        r.DisableIcmp.ValueBoolPointer(),
+	}
+	if !r.UserIDs.IsNull() && !r.UserIDs.IsUnknown() {
+		diag.Append(r.UserIDs.ElementsAs(ctx, &res.UserIDs, false)...)
+	} else {
+		res.UserIDs = []string{}
+	}
+	if !r.RoleIDs.IsNull() && !r.RoleIDs.IsUnknown() {
+		diag.Append(r.RoleIDs.ElementsAs(ctx, &res.RoleIDs, false)...)
+	} else {
+		res.RoleIDs = []int{}
+	}
+	if !r.ClientIDs.IsNull() && !r.ClientIDs.IsUnknown() {
+		diag.Append(r.ClientIDs.ElementsAs(ctx, &res.ClientIDs, false)...)
+	} else {
+		res.ClientIDs = []int{}
+	}
+
+	return res
+}
+
+func (data *siteResourceResourceModel) pushComputedParams(res *client.SiteResource, diag *diag.Diagnostics, ctx context.Context) {
+	data.NiceID = types.StringValue(res.NiceID)
+	data.Enabled = types.BoolPointerValue(res.Enabled)
+
+	userIds, diags := types.ListValueFrom(ctx, types.StringType, res.UserIDs)
+	diag.Append(diags...)
+	data.UserIDs = userIds
+
+	roleIds, diags := types.ListValueFrom(ctx, types.Int64Type, res.RoleIDs)
+	diag.Append(diags...)
+	data.RoleIDs = roleIds
+
+	clientIds, diags := types.ListValueFrom(ctx, types.Int64Type, res.ClientIDs)
+	diag.Append(diags...)
+	data.ClientIDs = clientIds
+
+	data.TCPPortRangeString = types.StringValue(res.TCPPortRangeString)
+	data.UDPPortRangeString = types.StringValue(res.UDPPortRangeString)
+	data.DisableIcmp = types.BoolPointerValue(res.DisableIcmp)
+}
+
 func (r *siteResourceResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var data siteResourceResourceModel
 
@@ -172,41 +223,22 @@ func (r *siteResourceResource) Create(ctx context.Context, req resource.CreateRe
 		return
 	}
 
-	res := &client.SiteResource{
-		Name:               data.Name.ValueString(),
-		Mode:               data.Mode.ValueString(),
-		SiteID:             int(data.SiteID.ValueInt64()),
-		Destination:        data.Destination.ValueString(),
-		Enabled:            data.Enabled.ValueBool(),
-		TCPPortRangeString: data.TCPPortRangeString.ValueString(),
-		UDPPortRangeString: data.UDPPortRangeString.ValueString(),
-		DisableIcmp:        data.DisableIcmp.ValueBool(),
-	}
-
-	if !data.Alias.IsNull() {
-		s := data.Alias.ValueString()
-		res.Alias = &s
-	}
-
-	resp.Diagnostics.Append(data.UserIDs.ElementsAs(ctx, &res.UserIDs, false)...)
-	resp.Diagnostics.Append(data.RoleIDs.ElementsAs(ctx, &res.RoleIDs, false)...)
-	resp.Diagnostics.Append(data.ClientIDs.ElementsAs(ctx, &res.ClientIDs, false)...)
-
+	res := data.ValueSiteResource(&resp.Diagnostics, ctx)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	created, err := r.client.CreateSiteResource(data.OrgID.ValueString(), res)
+	created, err := r.client.CreateSiteResource(data.OrgID.ValueString(), &res)
 	if err != nil {
 		resp.Diagnostics.AddError("Error creating site resource", err.Error())
 		return
 	}
 
-	data.ID = types.Int64Value(int64(created.ID))
-	data.NiceID = types.StringValue(created.NiceID)
-	data.TCPPortRangeString = types.StringValue(created.TCPPortRangeString)
-	data.UDPPortRangeString = types.StringValue(created.UDPPortRangeString)
-	data.DisableIcmp = types.BoolValue(created.DisableIcmp)
+	data.ID = types.Int64Value(created.ID)
+	created.UserIDs = res.UserIDs
+	created.RoleIDs = res.RoleIDs
+	created.ClientIDs = res.ClientIDs
+	data.pushComputedParams(created, &resp.Diagnostics, ctx)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
@@ -219,44 +251,22 @@ func (r *siteResourceResource) Read(ctx context.Context, req resource.ReadReques
 		return
 	}
 
-	res, err := r.client.GetSiteResource(data.OrgID.ValueString(), int(data.SiteID.ValueInt64()), int(data.ID.ValueInt64()))
+	res, err := r.client.GetSiteResource(data.OrgID.ValueString(), data.SiteID.ValueInt64(), data.ID.ValueInt64())
 	if err != nil {
-		resp.Diagnostics.AddError("Error reading site resource", err.Error())
+		resp.Diagnostics.AddError(
+			fmt.Sprintf("Error reading site-resource[ID=%d]", data.ID.ValueInt64()),
+			err.Error(),
+		)
 		return
 	}
 
 	data.Name = types.StringValue(res.Name)
 	data.Mode = types.StringValue(res.Mode)
 	data.Destination = types.StringValue(res.Destination)
-	data.Enabled = types.BoolValue(res.Enabled)
-	if res.Alias != nil {
-		data.Alias = types.StringValue(*res.Alias)
-	} else {
-		data.Alias = types.StringNull()
-	}
-	data.TCPPortRangeString = types.StringValue(res.TCPPortRangeString)
-	data.UDPPortRangeString = types.StringValue(res.UDPPortRangeString)
-	data.DisableIcmp = types.BoolValue(res.DisableIcmp)
-
-	roleIDs, err := r.client.GetSiteResourceRoles(int(data.ID.ValueInt64()))
-	if err == nil {
-		roleIDsList, diags := types.ListValueFrom(ctx, types.Int64Type, roleIDs)
-		resp.Diagnostics.Append(diags...)
-		data.RoleIDs = roleIDsList
-	}
-
-	userIDs, err := r.client.GetSiteResourceUsers(int(data.ID.ValueInt64()))
-	if err == nil {
-		userIDsList, diags := types.ListValueFrom(ctx, types.StringType, userIDs)
-		resp.Diagnostics.Append(diags...)
-		data.UserIDs = userIDsList
-	}
-
-	clientIDs, err := r.client.GetSiteResourceClients(int(data.ID.ValueInt64()))
-	if err == nil {
-		clientIDsList, diags := types.ListValueFrom(ctx, types.Int64Type, clientIDs)
-		resp.Diagnostics.Append(diags...)
-		data.ClientIDs = clientIDsList
+	data.Alias = types.StringPointerValue(res.Alias)
+	data.pushComputedParams(res, &resp.Diagnostics, ctx)
+	if resp.Diagnostics.HasError() {
+		return
 	}
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
@@ -271,47 +281,26 @@ func (r *siteResourceResource) Update(ctx context.Context, req resource.UpdateRe
 		return
 	}
 
-	res := &client.SiteResource{
-		Name:               data.Name.ValueString(),
-		Mode:               data.Mode.ValueString(),
-		SiteID:             int(data.SiteID.ValueInt64()),
-		Destination:        data.Destination.ValueString(),
-		Enabled:            data.Enabled.ValueBool(),
-		TCPPortRangeString: data.TCPPortRangeString.ValueString(),
-		UDPPortRangeString: data.UDPPortRangeString.ValueString(),
-		DisableIcmp:        data.DisableIcmp.ValueBool(),
-	}
-
-	if !data.Alias.IsNull() {
-		s := data.Alias.ValueString()
-		res.Alias = &s
-	}
-
-	resp.Diagnostics.Append(data.UserIDs.ElementsAs(ctx, &res.UserIDs, false)...)
-	resp.Diagnostics.Append(data.RoleIDs.ElementsAs(ctx, &res.RoleIDs, false)...)
-	resp.Diagnostics.Append(data.ClientIDs.ElementsAs(ctx, &res.ClientIDs, false)...)
-
+	res := data.ValueSiteResource(&resp.Diagnostics, ctx)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	_, err := r.client.UpdateSiteResource(int(state.ID.ValueInt64()), res)
+	updated, err := r.client.UpdateSiteResource(int(state.ID.ValueInt64()), &res)
 	if err != nil {
 		resp.Diagnostics.AddError("Error updating site resource", err.Error())
 		return
 	}
 
 	data.ID = state.ID
-	data.NiceID = state.NiceID
-	if data.TCPPortRangeString.IsUnknown() {
-		data.TCPPortRangeString = types.StringValue("")
+	updated.UserIDs = res.UserIDs
+	updated.RoleIDs = res.RoleIDs
+	updated.ClientIDs = res.ClientIDs
+	data.pushComputedParams(updated, &resp.Diagnostics, ctx)
+	if resp.Diagnostics.HasError() {
+		return
 	}
-	if data.UDPPortRangeString.IsUnknown() {
-		data.UDPPortRangeString = types.StringValue("")
-	}
-	if data.DisableIcmp.IsUnknown() {
-		data.DisableIcmp = types.BoolValue(false)
-	}
+
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
