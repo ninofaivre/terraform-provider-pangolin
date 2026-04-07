@@ -410,21 +410,23 @@ func (c *Client) GetSiteResourceClients(resID int64) ([]int, error) {
 
 // Resource definitions
 type Resource struct {
-	ID         int     `json:"resourceId,omitempty"`
-	Name       string  `json:"name"`
-	Protocol   *string `json:"protocol,omitempty"`
-	Http       *bool   `json:"http,omitempty"`
-	ProxyPort  *int32  `json:"proxyPort,omitempty"`
-	Subdomain  *string `json:"subdomain,omitempty"`
-	DomainID   *string `json:"domainId,omitempty"`
-	Enabled    *bool   `json:"enabled,omitempty"`
-	SSO        *bool   `json:"sso,omitempty"`
-	ApplyRules *bool   `json:"applyRules,omitempty"`
+	ID          int     `json:"resourceId,omitempty"`
+	Name        string  `json:"name"`
+	Protocol    *string `json:"protocol,omitempty"`
+	Http        *bool   `json:"http,omitempty"`
+	ProxyPort   *int32  `json:"proxyPort,omitempty"`
+	Subdomain   *string `json:"subdomain,omitempty"`
+	DomainID    *string `json:"domainId,omitempty"`
+	Enabled     *bool   `json:"enabled,omitempty"`
+	SSO         *bool   `json:"sso,omitempty"`
+	SkipToIdpId *int64  `json:"skipToIdpId,omitempty"`
+	ApplyRules  *bool   `json:"applyRules,omitempty"`
 }
 
 func (c *Client) CreateResource(orgID string, res Resource) (*Resource, error) {
 	res.Enabled = nil
 	res.SSO = nil
+	res.SkipToIdpId = nil
 	res.ApplyRules = nil
 	path := fmt.Sprintf("/org/%s/resource", orgID)
 	data, err := c.doRequest("PUT", path, res)

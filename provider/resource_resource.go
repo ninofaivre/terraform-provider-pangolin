@@ -34,17 +34,18 @@ type resourceResource struct {
 }
 
 type resourceResourceModel struct {
-	ID         types.Int64  `tfsdk:"id"`
-	OrgID      types.String `tfsdk:"org_id"`
-	Name       types.String `tfsdk:"name"`
-	Protocol   types.String `tfsdk:"protocol"`
-	Http       types.Bool   `tfsdk:"http"`
-	Subdomain  types.String `tfsdk:"subdomain"`
-	DomainID   types.String `tfsdk:"domain_id"`
-	ProxyPort  types.Int32  `tfsdk:"proxy_port"`
-	Enabled    types.Bool   `tfsdk:"enabled"`
-	SSO        types.Bool   `tfsdk:"sso"`
-	ApplyRules types.Bool   `tfsdk:"apply_rules"`
+	ID          types.Int64  `tfsdk:"id"`
+	OrgID       types.String `tfsdk:"org_id"`
+	Name        types.String `tfsdk:"name"`
+	Protocol    types.String `tfsdk:"protocol"`
+	Http        types.Bool   `tfsdk:"http"`
+	Subdomain   types.String `tfsdk:"subdomain"`
+	DomainID    types.String `tfsdk:"domain_id"`
+	ProxyPort   types.Int32  `tfsdk:"proxy_port"`
+	Enabled     types.Bool   `tfsdk:"enabled"`
+	SSO         types.Bool   `tfsdk:"sso"`
+	SkipToIdpId types.Int64  `tfsdk:"skip_to_idp_id"`
+	ApplyRules  types.Bool   `tfsdk:"apply_rules"`
 }
 
 func (r *resourceResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -122,6 +123,10 @@ func (r *resourceResource) Schema(_ context.Context, _ resource.SchemaRequest, r
 				Computed:            true,
 				Optional:            true,
 				MarkdownDescription: "Wether to enable sso.",
+			},
+			"skip_to_idp_id": schema.Int64Attribute{
+				Optional:            true,
+				MarkdownDescription: "Default idp to use.",
 			},
 			"apply_rules": schema.BoolAttribute{
 				Computed:            true,
@@ -218,6 +223,9 @@ func (r *resourceResource) ValidateConfig(ctx context.Context, req resource.Vali
 		}){
 			{"domain_id", data.DomainID},
 			{"subdomain", data.Subdomain},
+			{"sso", data.SSO},
+			{"skip_to_idp_id", data.SkipToIdpId},
+			{"apply_rules", data.ApplyRules},
 		}
 		for _, param := range forbiddenParams {
 			if param.Value.IsUnknown() {
@@ -250,15 +258,16 @@ func (r *resourceResource) Configure(_ context.Context, req resource.ConfigureRe
 
 func (r *resourceResourceModel) ValueResource() client.Resource {
 	return client.Resource{
-		Name:       r.Name.ValueString(),
-		Protocol:   r.Protocol.ValueStringPointer(),
-		Http:       r.Http.ValueBoolPointer(),
-		ProxyPort:  r.ProxyPort.ValueInt32Pointer(),
-		Subdomain:  nilIfUnknown(r.Subdomain, r.Subdomain.ValueStringPointer),
-		DomainID:   r.DomainID.ValueStringPointer(),
-		Enabled:    r.Enabled.ValueBoolPointer(),
-		SSO:        r.SSO.ValueBoolPointer(),
-		ApplyRules: r.ApplyRules.ValueBoolPointer(),
+		Name:        r.Name.ValueString(),
+		Protocol:    r.Protocol.ValueStringPointer(),
+		Http:        r.Http.ValueBoolPointer(),
+		ProxyPort:   r.ProxyPort.ValueInt32Pointer(),
+		Subdomain:   nilIfUnknown(r.Subdomain, r.Subdomain.ValueStringPointer),
+		DomainID:    r.DomainID.ValueStringPointer(),
+		Enabled:     r.Enabled.ValueBoolPointer(),
+		SSO:         r.SSO.ValueBoolPointer(),
+		SkipToIdpId: r.SkipToIdpId.ValueInt64Pointer(),
+		ApplyRules:  r.ApplyRules.ValueBoolPointer(),
 	}
 }
 
@@ -292,6 +301,7 @@ func (r *resourceResource) Create(ctx context.Context, req resource.CreateReques
 	for _, param := range []attr.Value{
 		data.Enabled,
 		data.SSO,
+		data.SkipToIdpId,
 		data.ApplyRules,
 	} {
 		if !param.IsUnknown() && !param.IsNull() {
@@ -334,6 +344,7 @@ func (r *resourceResource) Read(ctx context.Context, req resource.ReadRequest, r
 	data.Name = types.StringValue(res.Name)
 	data.Protocol = types.StringPointerValue(res.Protocol)
 	data.Http = types.BoolPointerValue(res.Http)
+	data.SkipToIdpId = types.Int64PointerValue(res.SkipToIdpId)
 	data.pushComputedParams(res)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
