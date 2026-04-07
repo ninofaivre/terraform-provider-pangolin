@@ -238,7 +238,6 @@ func (r *idpResource) Read(ctx context.Context, req resource.ReadRequest, resp *
 	data.Scopes = types.StringValue(res.Scopes)
 	data.Tags = types.StringPointerValue(res.Tags)
 	data.pushComputedParams(res)
-
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
@@ -250,10 +249,7 @@ func (r *idpResource) Update(ctx context.Context, req resource.UpdateRequest, re
 		return
 	}
 
-	res, err := r.client.UpdateIdp(
-		state.ID.ValueInt64(),
-		data.ValueIdp(),
-	)
+	res, err := r.client.UpdateIdp(state.ID.ValueInt64(), data.ValueIdp())
 	if err != nil {
 		resp.Diagnostics.AddError("Error updating idp", err.Error())
 		return
