@@ -34,16 +34,17 @@ type resourceResource struct {
 }
 
 type resourceResourceModel struct {
-	ID        types.Int64  `tfsdk:"id"`
-	Enabled   types.Bool   `tfsdk:"enabled"`
-	SSO       types.Bool   `tfsdk:"sso"`
-	OrgID     types.String `tfsdk:"org_id"`
-	Name      types.String `tfsdk:"name"`
-	Protocol  types.String `tfsdk:"protocol"`
-	Http      types.Bool   `tfsdk:"http"`
-	Subdomain types.String `tfsdk:"subdomain"`
-	DomainID  types.String `tfsdk:"domain_id"`
-	ProxyPort types.Int32  `tfsdk:"proxy_port"`
+	ID         types.Int64  `tfsdk:"id"`
+	OrgID      types.String `tfsdk:"org_id"`
+	Name       types.String `tfsdk:"name"`
+	Protocol   types.String `tfsdk:"protocol"`
+	Http       types.Bool   `tfsdk:"http"`
+	Subdomain  types.String `tfsdk:"subdomain"`
+	DomainID   types.String `tfsdk:"domain_id"`
+	ProxyPort  types.Int32  `tfsdk:"proxy_port"`
+	Enabled    types.Bool   `tfsdk:"enabled"`
+	SSO        types.Bool   `tfsdk:"sso"`
+	ApplyRules types.Bool   `tfsdk:"apply_rules"`
 }
 
 func (r *resourceResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -60,16 +61,6 @@ func (r *resourceResource) Schema(_ context.Context, _ resource.SchemaRequest, r
 				PlanModifiers: []planmodifier.Int64{
 					int64planmodifier.UseStateForUnknown(),
 				},
-			},
-			"enabled": schema.BoolAttribute{
-				Computed:            true,
-				Optional:            true,
-				MarkdownDescription: "Wether the resource is enabled or not.",
-			},
-			"sso": schema.BoolAttribute{
-				Computed:            true,
-				Optional:            true,
-				MarkdownDescription: "Wether to enable sso or not.",
 			},
 			"org_id": schema.StringAttribute{
 				Required:            true,
@@ -121,6 +112,22 @@ func (r *resourceResource) Schema(_ context.Context, _ resource.SchemaRequest, r
 					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
+			// need update
+			"enabled": schema.BoolAttribute{
+				Computed:            true,
+				Optional:            true,
+				MarkdownDescription: "Wether the resource is enabled or not.",
+			},
+			"sso": schema.BoolAttribute{
+				Computed:            true,
+				Optional:            true,
+				MarkdownDescription: "Wether to enable sso.",
+			},
+			"apply_rules": schema.BoolAttribute{
+				Computed:            true,
+				Optional:            true,
+				MarkdownDescription: "Wether to apply rules.",
+			},
 		},
 	}
 }
@@ -139,7 +146,6 @@ func (r *resourceResource) ValidateConfig(ctx context.Context, req resource.Vali
 			Value attr.Value
 		}){
 			{"domain_id", data.DomainID},
-			{"subdomain", data.Subdomain},
 		}
 		for _, param := range requiredParams {
 			if param.Value.IsUnknown() {
@@ -244,14 +250,15 @@ func (r *resourceResource) Configure(_ context.Context, req resource.ConfigureRe
 
 func (r *resourceResourceModel) ValueResource() client.Resource {
 	return client.Resource{
-		Name:      r.Name.ValueString(),
-		Protocol:  r.Protocol.ValueStringPointer(),
-		Http:      r.Http.ValueBoolPointer(),
-		Enabled:   r.Enabled.ValueBoolPointer(),
-		SSO:       r.SSO.ValueBoolPointer(),
-		ProxyPort: r.ProxyPort.ValueInt32Pointer(),
-		Subdomain: r.Subdomain.ValueStringPointer(),
-		DomainID:  r.DomainID.ValueStringPointer(),
+		Name:       r.Name.ValueString(),
+		Protocol:   r.Protocol.ValueStringPointer(),
+		Http:       r.Http.ValueBoolPointer(),
+		ProxyPort:  r.ProxyPort.ValueInt32Pointer(),
+		Subdomain:  nilIfUnknown(r.Subdomain, r.Subdomain.ValueStringPointer),
+		DomainID:   r.DomainID.ValueStringPointer(),
+		Enabled:    r.Enabled.ValueBoolPointer(),
+		SSO:        r.SSO.ValueBoolPointer(),
+		ApplyRules: r.ApplyRules.ValueBoolPointer(),
 	}
 }
 
@@ -261,6 +268,7 @@ func (data *resourceResourceModel) pushComputedParams(res *client.Resource) {
 	data.DomainID = types.StringPointerValue(res.DomainID)
 	data.Enabled = types.BoolPointerValue(res.Enabled)
 	data.SSO = types.BoolPointerValue(res.SSO)
+	data.ApplyRules = types.BoolPointerValue(res.ApplyRules)
 }
 
 func (r *resourceResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
@@ -281,7 +289,11 @@ func (r *resourceResource) Create(ctx context.Context, req resource.CreateReques
 	data.pushComputedParams(created)
 
 	var needUpdate = false
-	for _, param := range []attr.Value{data.Enabled} {
+	for _, param := range []attr.Value{
+		data.Enabled,
+		data.SSO,
+		data.ApplyRules,
+	} {
 		if !param.IsUnknown() && !param.IsNull() {
 			needUpdate = true
 			break
