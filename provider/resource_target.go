@@ -7,12 +7,13 @@ import (
 	"strconv"
 
 	"github.com/groteck/terraform-provider-pangolin/internal/client"
-	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/int32validator"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int32planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
@@ -55,7 +56,7 @@ type targetResourceModel struct {
 	PathMatchType       types.String `tfsdk:"path_match_type"`
 	RewritePath         types.String `tfsdk:"rewrite_path"`
 	RewritePathType     types.String `tfsdk:"rewrite_path_type"`
-	Priority            types.Int64  `tfsdk:"priority"`
+	Priority            types.Int32  `tfsdk:"priority"`
 }
 
 func (r *targetResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -174,15 +175,15 @@ func (r *targetResource) Schema(_ context.Context, _ resource.SchemaRequest, res
 				Optional:            true,
 				MarkdownDescription: "The rewrite path type.",
 			},
-			"priority": schema.Int64Attribute{
+			"priority": schema.Int32Attribute{
 				Optional:            true,
 				Computed:            true,
 				MarkdownDescription: "The priority of the target.",
-				PlanModifiers: []planmodifier.Int64{
-					int64planmodifier.UseStateForUnknown(),
+				PlanModifiers: []planmodifier.Int32{
+					int32planmodifier.UseStateForUnknown(),
 				},
-				Validators: []validator.Int64{
-					int64validator.Between(1, 1000),
+				Validators: []validator.Int32{
+					int32validator.Between(1, 1000),
 				},
 			},
 		},
@@ -205,6 +206,7 @@ func (r *targetResource) Configure(_ context.Context, req resource.ConfigureRequ
 
 func (r *targetResourceModel) ValueTarget() client.Target {
 	return client.Target{
+		ResourceID:          r.ResourceID.ValueInt64Pointer(),
 		SiteID:              r.SiteID.ValueInt64(),
 		IP:                  r.IP.ValueString(),
 		Port:                r.Port.ValueInt32(),
@@ -227,13 +229,13 @@ func (r *targetResourceModel) ValueTarget() client.Target {
 		PathMatchType:       r.PathMatchType.ValueStringPointer(),
 		RewritePath:         r.RewritePath.ValueStringPointer(),
 		RewritePathType:     r.RewritePathType.ValueStringPointer(),
-		Priority:            nilIfUnknown(r.Priority, r.Priority.ValueInt64Pointer),
+		Priority:            nilIfUnknown(r.Priority, r.Priority.ValueInt32Pointer),
 	}
 }
 
 func (data *targetResourceModel) pushComputedParams(res *client.Target) {
 	data.Enabled = types.BoolPointerValue(res.Enabled)
-	data.Priority = types.Int64PointerValue(res.Priority)
+	data.Priority = types.Int32PointerValue(res.Priority)
 	data.HCEnabled = types.BoolPointerValue(res.HCEnabled)
 }
 
@@ -247,7 +249,7 @@ func (r *targetResource) Create(ctx context.Context, req resource.CreateRequest,
 
 	target := data.ValueTarget()
 
-	created, err := r.client.CreateTarget(int(data.ResourceID.ValueInt64()), target)
+	created, err := r.client.CreateTarget(target)
 	if err != nil {
 		resp.Diagnostics.AddError("Error creating target", err.Error())
 		return
@@ -336,7 +338,7 @@ func (r *targetResource) Delete(ctx context.Context, req resource.DeleteRequest,
 		return
 	}
 
-	err := r.client.DeleteTarget(int(data.ID.ValueInt64()))
+	err := r.client.DeleteTarget(data.ID.ValueInt64())
 	if err != nil {
 		resp.Diagnostics.AddError("Error deleting target", err.Error())
 		return
